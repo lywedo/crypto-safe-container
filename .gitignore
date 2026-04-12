@@ -1,0 +1,6 @@
+.env
+backups/
+*.tar.gz
+*.gpg
+*:Zone.Identifier
+crx/

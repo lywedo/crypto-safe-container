@@ -1,0 +1,8 @@
+.env
+.env.example
+.git
+.gitignore
+backups/
+README.md
+vault.sh
+squid/

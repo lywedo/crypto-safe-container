@@ -1,0 +1,66 @@
+##############################################################
+# Crypto Vault — Isolated browser + Web3 CLI tools
+#
+# Usage:
+#   cp .env.example .env
+#   docker compose up -d egress-proxy   # Start proxy
+#   ./vault-x11.sh                      # Launch Chrome (X11)
+#
+# Architecture:
+#   crypto-vault ──▶ egress-proxy ──▶ internet (whitelist only)
+#       (internal network, no direct internet)
+##############################################################
+
+services:
+  # ── Egress Proxy: Whitelist-only internet access ──
+  egress-proxy:
+    image: ubuntu/squid:latest
+    container_name: vault-egress-proxy
+    hostname: egress-proxy
+
+    cap_drop: [ALL]
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+
+    networks:
+      vault-internal:
+        ipv4_address: 172.30.0.2
+      vault-external: {}
+
+    volumes:
+      - ./squid/squid.conf:/etc/squid/squid.conf:ro
+      - ./squid/whitelist.txt:/etc/squid/whitelist.txt:ro
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+    restart: unless-stopped
+
+networks:
+  # Internal network: NO direct internet — containers must use proxy
+  vault-internal:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+  # External network: proxy's internet uplink
+  vault-external:
+    driver: bridge
+
+volumes:
+  chrome-profile:
+    name: crypto-vault-chrome
+  vault-downloads:
+    name: crypto-vault-downloads
+  vault-projects:
+    name: crypto-vault-projects

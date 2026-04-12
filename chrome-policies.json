@@ -1,0 +1,14 @@
+{
+  "RestoreOnStartup": 4,
+  "RestoreOnStartupURLs": [
+    "file:///opt/chrome-extensions/welcome.html"
+  ],
+  "DefaultBrowserSettingEnabled": false,
+  "MetricsReportingEnabled": false,
+  "SafeBrowsingEnabled": true,
+  "PasswordManagerEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "TranslateEnabled": false,
+  "SpellcheckEnabled": false
+}

@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────
+# Allowed domains for the Crypto Vault
+# One domain per line. Prefix with . to allow subdomains.
+# Edit this file and restart: docker compose restart egress-proxy
+# ─────────────────────────────────────────────────
+
+# ── RPC Providers ──
+.infura.io
+.alchemy.com
+.quicknode.com
+.ankr.com
+.llamarpc.com
+.cloudflare-eth.com
+
+# ── Block Explorers ──
+.etherscan.io
+.polygonscan.com
+.arbiscan.io
+.bscscan.com
+.basescan.org
+
+# ── Major DeFi ──
+.uniswap.org
+.aave.com
+.1inch.io
+.curve.fi
+.lido.fi
+.compound.finance
+.balancer.fi
+.paraswap.io
+
+# ── Wallet & Extension Updates ──
+.metamask.io
+.rabby.io
+.phantom.app
+.phantom.tech
+.phantom.com
+clients2.google.com
+chrome.google.com
+chromewebstore.google.com
+.gstatic.com
+.googleusercontent.com
+.gvt1.com
+.googleapis.com
+
+# ── Hardware Wallet Bridges ──
+.ledger.com
+.trezor.io
+
+# ── Gas / Price Feeds ──
+.coingecko.com
+.defillama.com
+.ethgasstation.info
+.blocknative.com
+
+# ── IPFS Gateways (used by many DeFi frontends) ──
+.ipfs.io
+.cloudflare-ipfs.com
+.dweb.link
+
+# ── Chain-specific RPCs ──
+.optimism.io
+.arbitrum.io
+.base.org
+.polygon-rpc.com
+
+# ── Solana Ecosystem ──
+.solana.com
+.solflare.com
+.solscan.io
+.jup.ag
+.raydium.io
+.marinade.finance
+.helius.dev
+.triton.one
