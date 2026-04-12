@@ -28,23 +28,58 @@
 
 ---
 
-## Why This Exists
+## The Problem
 
-North Korean state hackers (Lazarus Group) run a campaign called **"Contagious Interview"** — they pose as recruiters, send developers a JS repo to clone, and `npm install` triggers obfuscated malware that drains every crypto wallet on your machine.
+Your crypto wallets and your daily browsing/coding share the same computer. That means:
 
-This isn't theoretical. It's industrial-scale:
+1. **A bad `npm install`** can read your MetaMask files and steal your keys
+2. **A malicious website** can drop malware that drains every wallet on your machine
+3. **Even if malware gets your wallet data**, it can silently send it to a hacker's server — and you'd never know until the funds are gone
 
-| Stat | Source |
-|---|---|
-| **535+** malicious npm packages published | [Socket.dev (2025)](https://socket.dev/blog/north-korea-contagious-interview-campaign-338-malicious-npm-packages) |
-| **$1.5B** stolen in a single hack (Bybit, Feb 2025) | [CSIS](https://www.csis.org/analysis/bybit-heist-and-future-us-crypto-regulation) |
-| **16+** wallet extensions targeted (MetaMask, Phantom, etc.) | [Unit 42](https://unit42.paloaltonetworks.com/north-korean-threat-actors-lure-tech-job-seekers-as-fake-recruiters/) |
-| Malware **rewrites MetaMask** to capture passwords on every unlock | [Seongsu Park (Feb 2026)](https://sp4rk.medium.com/) |
-| VS Code `tasks.json` auto-executes malware on **folder open** | [The Hacker News (Mar 2026)](https://thehackernews.com/2026/03/north-korean-hackers-abuse-vs-code-auto.html) |
+This is not hypothetical. North Korean hackers (Lazarus Group) have stolen **billions** this way — posing as recruiters, sending devs a repo to clone, and `npm install` does the rest.
 
-The attack works because `npm install` runs `postinstall` scripts that can do *anything* — read your filesystem, steal browser extension data, exfiltrate keys. If your wallets live on the same machine where you run untrusted code, they're one `npm install` away from being emptied.
+## How This Project Protects You
 
-**crypto-safe-container** solves this by running your wallets in an isolated Docker environment where even a compromised browser can only talk to domains you've explicitly approved.
+**crypto-safe-container** puts your wallets inside a locked box (Docker container) with two simple rules:
+
+### Rule 1: Your wallets can't see your computer
+
+The container is isolated. Malware inside it **cannot** read your host files, other browsers, SSH keys, or anything outside the box. Your wallets live in a separate world.
+
+### Rule 2: The box can only talk to sites you approve
+
+Even if something bad gets inside the box, it **cannot send your data to a hacker's server**. All internet traffic goes through a proxy that only allows whitelisted domains — Ethereum RPCs, Uniswap, Aave, block explorers, etc. Everything else is blocked.
+
+```
+Normal setup:        Malware steals keys → sends to evil.com → funds gone
+
+With this project:   Malware steals keys → tries evil.com → BLOCKED by proxy
+                                          → tries any site → BLOCKED
+                                          → data goes nowhere
+```
+
+### What's whitelisted by default?
+
+Only what you need for DeFi — nothing more:
+
+- RPC providers (Infura, Alchemy, Ankr)
+- DeFi protocols (Uniswap, Aave, Curve, Lido, Jupiter, Raydium)
+- Block explorers (Etherscan, Solscan)
+- Wallet updates (MetaMask, Phantom, Rabby)
+- Hardware wallet bridges (Ledger, Trezor)
+
+You control the list. Add or remove domains anytime in [`squid/whitelist.txt`](squid/whitelist.txt).
+
+## Real-world attacks this stops
+
+| Attack | What happens normally | With crypto-safe-container |
+|---|---|---|
+| Malicious `npm install` | Reads your Chrome profile, steals wallet keys, sends to attacker | Container has no access to your host Chrome profile |
+| Fake DApp drains wallet | You sign a bad transaction, malware exfiltrates your seed | Transaction goes through (your call), but seed can't be exfiltrated to non-whitelisted servers |
+| Clipboard hijacker | Replaces your copied wallet address with attacker's | Malware is inside the container — can't touch your host clipboard |
+| VS Code `tasks.json` exploit | Opens a folder, auto-runs malware, steals everything | Your wallets aren't on the same machine (they're in the container) |
+
+> **A hardware wallet (Ledger/Trezor) is still the strongest protection.** This project is the next best thing for software wallets, and works great alongside hardware wallets too (USB passthrough supported).
 
 ---
 
