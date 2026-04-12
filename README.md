@@ -1,4 +1,4 @@
-<h1 align="center">🔐 crypto-safe-container</h1>
+<h1 align="center">crypto-safe-container</h1>
 
 <p align="center">
   <strong>A hardened Docker environment that isolates your crypto wallets behind a whitelist-only egress proxy.</strong><br />
@@ -15,24 +15,20 @@
   <a href="https://github.com/lywedo/crypto-safe-container/stargazers">
     <img src="https://img.shields.io/github/stars/lywedo/crypto-safe-container?style=social" alt="Stars" />
   </a>
-  <a href="https://hub.docker.com/r/kasmweb/chrome">
-    <img src="https://img.shields.io/badge/base-kasmweb%2Fchrome-blue" alt="Base Image" />
-  </a>
 </p>
 
 <p align="center">
-  <a href="#-why-this-exists">Why</a> •
-  <a href="#%EF%B8%8F-architecture">Architecture</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-cli-tools">CLI Tools</a> •
-  <a href="#-hardware-wallets">Hardware Wallets</a> •
-  <a href="#-wsl2-users">WSL2</a> •
+  <a href="#-why-this-exists">Why</a> &bull;
+  <a href="#%EF%B8%8F-architecture">Architecture</a> &bull;
+  <a href="#-quick-start">Quick Start</a> &bull;
+  <a href="#-cli-tools">CLI Tools</a> &bull;
+  <a href="#-hardware-wallets">Hardware Wallets</a> &bull;
   <a href="#-faq">FAQ</a>
 </p>
 
 ---
 
-## 🚨 Why This Exists
+## Why This Exists
 
 North Korean state hackers (Lazarus Group) run a campaign called **"Contagious Interview"** — they pose as recruiters, send developers a JS repo to clone, and `npm install` triggers obfuscated malware that drains every crypto wallet on your machine.
 
@@ -52,27 +48,26 @@ The attack works because `npm install` runs `postinstall` scripts that can do *a
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                    Your Host Machine                      │
 │                                                           │
-│    Browser → https://localhost:6901 (KasmVNC)            │
+│    X11 ─────── Chrome window (native, pixel-perfect)     │
 │                       │                                   │
 │    ┌──────────────────┼───────── vault-internal ───────┐  │
 │    │                  │          (no internet)          │  │
 │    │   ┌──────────────▼────────────────────────────┐   │  │
 │    │   │        crypto-vault (172.30.0.10)          │   │  │
 │    │   │                                            │   │  │
-│    │   │   🌐 Chromium (KasmVNC)                    │   │  │
-│    │   │   🦊 MetaMask  👻 Phantom  🐰 Rabby       │   │  │
-│    │   │   🔨 Foundry (forge / cast / anvil)        │   │  │
-│    │   │   📦 Node.js 20 + Hardhat + ethers.js      │   │  │
+│    │   │   Chrome (X11 forwarding to host)          │   │  │
+│    │   │   MetaMask / Phantom / Rabby               │   │  │
+│    │   │   Foundry (forge / cast / anvil)            │   │  │
+│    │   │   Node.js 20 + Hardhat + ethers.js          │   │  │
 │    │   │                                            │   │  │
-│    │   │   🔒 --cap-drop ALL                        │   │  │
-│    │   │   🔒 read-only filesystem                  │   │  │
-│    │   │   🔒 no-new-privileges                     │   │  │
+│    │   │   --cap-drop ALL                           │   │  │
+│    │   │   no-new-privileges                        │   │  │
 │    │   └──────────────┬────────────────────────────┘   │  │
 │    │                  │ http://172.30.0.2:3128          │  │
 │    │   ┌──────────────▼────────────────────────────┐   │  │
@@ -85,39 +80,79 @@ The attack works because `npm install` runs `postinstall` scripts that can do *a
 
 **Key security properties:**
 
-- 🔐 **No direct internet** — The vault sits on an `internal: true` Docker network
-- 🚧 **Whitelist-only egress** — All traffic passes through a Squid proxy; only domains in `whitelist.txt` are allowed
-- 🖥️ **Display isolation** — KasmVNC (not X11) means no keylogging, no clipboard leaks to host
-- 🛡️ **Hardened container** — All Linux capabilities dropped, read-only root FS, PID limits, memory caps
-- 📦 **npm locked down** — `ignore-scripts=true` globally prevents postinstall attacks inside the vault
-- 🔌 **Hardware wallet ready** — USB passthrough for Ledger/Trezor (keys never touch software)
+- **No direct internet** — The vault sits on an `internal: true` Docker network
+- **Whitelist-only egress** — All traffic passes through a Squid proxy; only domains in `whitelist.txt` are allowed
+- **Native X11 rendering** — Chrome runs as a native window via X11 forwarding — no VNC blur, no compression, no latency
+- **Hardened container** — All Linux capabilities dropped, PID limits, memory caps, no-new-privileges
+- **npm locked down** — `ignore-scripts=true` globally prevents postinstall attacks inside the vault
+- **Hardware wallet ready** — USB passthrough for Ledger/Trezor (keys never touch software)
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 **Prerequisites:** Docker Engine 20.10+ and Docker Compose v2
+
+### Linux / WSL2
+
+X11 works out of the box (WSLg on WSL2, native X server on Linux).
 
 ```bash
 git clone https://github.com/lywedo/crypto-safe-container.git
 cd crypto-safe-container
 
-# Set your VNC password
-cp .env.example .env
-nano .env    # Change VAULT_PASSWORD
+# Build the image
+docker compose build
 
-# Build and start
-chmod +x vault.sh
-./vault.sh up
+# Launch Chrome
+./vault-x11.sh
 ```
 
-Open **https://localhost:6901** in your browser, accept the self-signed cert, and enter your VNC password.
+Chrome opens as a native window with a welcome page to install MetaMask, Rabby, and Phantom from the Chrome Web Store. Extensions persist across restarts.
 
-MetaMask, Phantom, and Rabby are pre-installed automatically on first launch.
+**Optional: Add to your app launcher / Start Menu**
+
+```bash
+make install-linux
+# Search "Crypto Vault" in your app launcher
+```
+
+### macOS
+
+Requires [XQuartz](https://www.xquartz.org/) for X11 support.
+
+```bash
+brew install --cask xquartz
+# Log out and back in after installing XQuartz
+
+git clone https://github.com/lywedo/crypto-safe-container.git
+cd crypto-safe-container
+
+docker compose build
+./vault-x11.sh
+```
+
+**Optional: Add to Launchpad**
+
+```bash
+make install-mac
+```
 
 ---
 
-## 🔧 CLI Tools
+## Wallet Extensions
+
+On first launch, Chrome opens a welcome page with install links for:
+
+- **MetaMask** — Ethereum wallet & DApp browser
+- **Rabby Wallet** — Multi-chain wallet with security alerts
+- **Phantom** — Solana, Ethereum & multi-chain wallet
+
+Click **"Add to Chrome"** for each one. This only needs to be done once — extensions are stored in a persistent Docker volume (`crypto-vault-chrome`) and survive container restarts.
+
+---
+
+## CLI Tools
 
 Web3 CLI tools are available inside the vault and via the helper script:
 
@@ -130,12 +165,11 @@ Web3 CLI tools are available inside the vault and via the helper script:
 ./vault.sh forge build
 ./vault.sh forge test
 ./vault.sh cast balance vitalik.eth --rpc-url https://eth.llamarpc.com
-./vault.sh cast chain-id --rpc-url https://eth.llamarpc.com
 
 # Hardhat (from host)
 ./vault.sh hardhat compile
 
-# Or work interactively inside the vault
+# Or work interactively
 ./vault.sh shell
 cd projects && npx hardhat init
 ```
@@ -144,7 +178,7 @@ cd projects && npx hardhat init
 
 | Command | Description |
 |---|---|
-| `./vault.sh up` | Build and start vault + proxy |
+| `./vault.sh up` | Launch Chrome + proxy (X11) |
 | `./vault.sh down` | Stop everything |
 | `./vault.sh shell` | Bash shell inside the vault |
 | `./vault.sh forge <args>` | Run Foundry forge |
@@ -154,12 +188,12 @@ cd projects && npx hardhat init
 | `./vault.sh whitelist` | Show allowed domains |
 | `./vault.sh reload-proxy` | Apply whitelist changes |
 | `./vault.sh backup` | Backup Chrome profile |
-| `./vault.sh status` | Health check + proxy test |
-| `./vault.sh nuke` | ⚠️ Delete ALL vault data |
+| `./vault.sh status` | Health check |
+| `./vault.sh nuke` | Delete ALL vault data |
 
 ---
 
-## 🌐 Managing the Whitelist
+## Managing the Whitelist
 
 The proxy blocks everything not in `squid/whitelist.txt`. To add a new protocol:
 
@@ -169,16 +203,13 @@ echo ".newprotocol.xyz" >> squid/whitelist.txt
 
 # Apply without restarting the vault
 ./vault.sh reload-proxy
-
-# Verify
-./vault.sh status
 ```
 
-Default whitelist includes: Ethereum/Solana RPCs, major DeFi (Uniswap, Aave, Jupiter, Raydium), block explorers, wallet update servers, IPFS gateways, and hardware wallet bridges. See [`squid/whitelist.txt`](squid/whitelist.txt) for the full list.
+Default whitelist includes: Ethereum/Solana RPCs, major DeFi (Uniswap, Aave, Jupiter, Raydium), block explorers, Chrome Web Store, wallet update servers, IPFS gateways, and hardware wallet bridges. See [`squid/whitelist.txt`](squid/whitelist.txt) for the full list.
 
 ---
 
-## 🔌 Hardware Wallets
+## Hardware Wallets
 
 Ledger and Trezor work via USB passthrough. Your private keys stay on the device's secure element — they never touch the container.
 
@@ -193,46 +224,36 @@ sudo curl https://data.trezor.io/udev/51-trezor.rules -o /etc/udev/rules.d/51-tr
 sudo udevadm control --reload-rules
 ```
 
-**Step 2: Uncomment in `docker-compose.yml`**
+**Step 2: Uncomment USB passthrough in `vault-x11.sh`** (add these flags to the `docker run` command)
 
-```yaml
-devices:
-  - /dev/bus/usb:/dev/bus/usb
-  - /dev/hidraw0:/dev/hidraw0
-group_add:
-  - plugdev
-```
-
-**Step 3:** `./vault.sh down && ./vault.sh up`
-
----
-
-## 🪟 WSL2 Users
-
-This works on WSL2 with some caveats:
-
-- ✅ **Use the VNC web client** (https://localhost:6901) — not X11 forwarding
-- ⚠️ WSL2 filesystem is readable from Windows at `\\wsl$\` — Docker volumes (where your wallet data lives) are inside Docker's VM and safer, but be aware
-- 🔒 Consider Docker Desktop's **Hyper-V backend** for stronger isolation
-- 🔒 Disable Windows/WSL interop if you want maximum separation:
-
-```ini
-# /etc/wsl.conf
-[interop]
-enabled=false
-
-[automount]
-enabled=false
+```bash
+--device /dev/bus/usb:/dev/bus/usb \
+--device /dev/hidraw0:/dev/hidraw0 \
+--group-add plugdev
 ```
 
 ---
 
-## 💾 Backup & Recovery
+## Persistent Data
+
+Three Docker volumes persist across container restarts:
+
+| Volume | Contents |
+|---|---|
+| `crypto-vault-chrome` | Chrome profile — extensions, wallet data, bookmarks |
+| `crypto-vault-downloads` | Downloaded files |
+| `crypto-vault-projects` | Hardhat/Foundry project files |
+
+Data survives `./vault.sh down` and restarts. Only `./vault.sh nuke` (which runs `docker compose down -v`) destroys it.
+
+---
+
+## Backup & Recovery
 
 ```bash
 # Backup Chrome profile (encrypted wallet vaults, extension config)
 ./vault.sh backup
-# → backups/YYYYMMDD_HHMMSS/chrome-profile.tar.gz
+# -> backups/YYYYMMDD_HHMMSS/chrome-profile.tar.gz
 
 # Encrypt before storing
 gpg -c backups/*/chrome-profile.tar.gz
@@ -242,16 +263,16 @@ gpg -c backups/*/chrome-profile.tar.gz
 
 ---
 
-## ⚠️ Threat Model & Limitations
+## Threat Model & Limitations
 
 Be honest about what this does and doesn't protect:
 
 | Protected | NOT Protected |
 |---|---|
-| ✅ Wallet extensions isolated from host filesystem | ❌ Docker shares the host kernel — container escapes exist |
-| ✅ Exfiltration blocked to non-whitelisted domains | ❌ DNS poisoning could theoretically bypass the whitelist |
-| ✅ Display isolated (no X11 keylogging) | ❌ Browser zero-days can still compromise the vault |
-| ✅ npm postinstall disabled globally | ❌ Your seed phrase — store it offline, never digitally |
+| Wallet extensions isolated from host filesystem | Docker shares the host kernel — container escapes exist |
+| Exfiltration blocked to non-whitelisted domains | DNS poisoning could theoretically bypass the whitelist |
+| npm postinstall disabled globally | Browser zero-days can still compromise the vault |
+| Chrome rendered natively (X11) — no VNC attack surface | Your seed phrase — store it offline, never digitally |
 
 **For wallets holding >$50K:** Consider a dedicated VM (VirtualBox/KVM) or Qubes OS instead of Docker. Container isolation is meaningful but not equivalent to hardware virtualization.
 
@@ -259,34 +280,32 @@ Be honest about what this does and doesn't protect:
 
 ---
 
-## 📁 File Structure
+## File Structure
 
 ```
 crypto-safe-container/
-├── docker-compose.yml          # Vault + egress proxy services
-├── Dockerfile                  # Custom image (Kasm Chrome + Foundry + Node.js)
-├── chrome-policies.json        # Auto-install MetaMask, Phantom, Rabby
-├── vault.sh                    # Helper CLI
-├── .env.example                # VNC password template
+├── docker-compose.yml          # Egress proxy service
+├── Dockerfile                  # Chrome + Foundry + Node.js image
+├── vault-x11.sh                # Launch Chrome via X11 (main entry point)
+├── vault.sh                    # Helper CLI commands
+├── chrome-policies.json        # Chrome managed policy
+├── welcome.html                # First-run wallet install page
+├── Makefile                    # install-linux / install-mac targets
+├── crypto-vault.desktop        # Linux .desktop entry
+├── .env.example                # Template
 ├── .dockerignore
 ├── .gitignore
-├── LICENSE
-├── CONTRIBUTING.md
 ├── squid/
 │   ├── squid.conf              # Proxy configuration
 │   └── whitelist.txt           # Allowed domains (edit this!)
 └── .github/
-    ├── workflows/
-    │   └── ci.yml              # Build + security scan
+    ├── workflows/ci.yml
     └── ISSUE_TEMPLATE/
-        ├── bug_report.md
-        ├── feature_request.md
-        └── domain_request.md
 ```
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
@@ -298,13 +317,13 @@ The most impactful contributions right now:
 
 ---
 
-## 📜 License
+## License
 
 [MIT](LICENSE) — use it, fork it, protect your crypto.
 
 ---
 
 <p align="center">
-  <strong>If this project helped you, consider giving it a ⭐</strong><br />
+  <strong>If this project helped you, consider giving it a star.</strong><br />
   Every star helps more developers discover it before they get scammed.
 </p>

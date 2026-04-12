@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Crypto Vault
+Comment=Isolated Chrome browser for crypto wallets
+Exec=/opt/crypto-vault/vault-x11.sh
+Icon=google-chrome
+Terminal=false
+Type=Application
+Categories=Finance;Network;
