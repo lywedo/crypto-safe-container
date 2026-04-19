@@ -1,8 +1,8 @@
 ########################################################
-# Crypto Vault — Chrome + Foundry + Node.js
+# Crypto Vault — Chromium + Foundry + Node.js
 #
 # Base: debian:bookworm-slim (minimal, ~80MB)
-# Chrome is installed from Google's official apt repo.
+# Chromium from Debian repos (see DL3008 note below).
 # Adds: Foundry (forge/cast/anvil), Node.js 20, ethers.js,
 #        hardhat, and wallet extension welcome page.
 # Run via: ./vault-x11.sh (native X11 window)
@@ -10,11 +10,19 @@
 
 FROM debian:bookworm-slim
 
+# `-o pipefail` so `curl | bash` failures surface instead of being swallowed
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # ── System deps + Chromium ──
 # Using Debian's chromium (not Google Chrome) because recent Chrome
 # stable builds hit SIGILL on Hyper-V/WSL2 due to aggressive SIMD in
 # the precompiled binaries. Debian's build is more conservative and
 # runs everywhere. Wallet extensions (same IDs) work identically.
+#
+# DL3008 (apt version pinning) is disabled in .hadolint.yaml — pinning
+# versions causes the image to break whenever Debian rotates a package.
+# `debian:bookworm-slim` is already a floating tag; for bit-for-bit
+# reproducibility, pin the base to a digest.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git gnupg build-essential python3 \
         chromium fonts-liberation libu2f-udev libasound2 xdg-utils \
@@ -33,12 +41,12 @@ RUN curl -L https://foundry.paradigm.xyz | FOUNDRY_DIR=/opt/foundry bash \
 ENV PATH="/opt/foundry/bin:${PATH}"
 RUN forge --version && cast --version && anvil --version
 
-# ── Global Node.js Web3 tools ──
+# ── Global Node.js Web3 tools (major-pinned per DL3016) ──
 RUN npm install -g \
-        hardhat \
-        ethers@6 \
-        @nomicfoundation/hardhat-toolbox \
-        solc \
+        hardhat@^3 \
+        ethers@^6 \
+        @nomicfoundation/hardhat-toolbox@^7 \
+        solc@^0.8 \
     && npm cache clean --force
 
 # ── Chromium managed policy (same file deployed to both Chromium and
