@@ -6,6 +6,10 @@
 </p>
 
 <p align="center">
+  <img src=".github/demo.gif" alt="Demo: exfiltration blocked" width="720">
+</p>
+
+<p align="center">
   <a href="https://github.com/lywedo/crypto-safe-container/actions/workflows/ci.yml">
     <img src="https://github.com/lywedo/crypto-safe-container/actions/workflows/ci.yml/badge.svg" alt="CI" />
   </a>
@@ -115,9 +119,11 @@ You control the list. Add or remove domains anytime in [`squid/whitelist.txt`](s
 
 **Key security properties:**
 
+- **Minimal base image** — `debian:bookworm-slim` + Google Chrome from the official apt repo (~1.9GB final image vs ~5GB with KasmVNC)
 - **No direct internet** — The vault sits on an `internal: true` Docker network
 - **Whitelist-only egress** — All traffic passes through a Squid proxy; only domains in `whitelist.txt` are allowed
 - **Native X11 rendering** — Chrome runs as a native window via X11 forwarding — no VNC blur, no compression, no latency
+- **Non-root user** — Chrome runs as `vault` (UID 1000), not root
 - **Hardened container** — All Linux capabilities dropped, PID limits, memory caps, no-new-privileges
 - **npm locked down** — `ignore-scripts=true` globally prevents postinstall attacks inside the vault
 - **Hardware wallet ready** — USB passthrough for Ledger/Trezor (keys never touch software)
@@ -179,11 +185,41 @@ make install-mac
 
 On first launch, Chrome opens a welcome page with install links for:
 
-- **MetaMask** — Ethereum wallet & DApp browser
-- **Rabby Wallet** — Multi-chain wallet with security alerts
-- **Phantom** — Solana, Ethereum & multi-chain wallet
+| Extension | Extension ID |
+|---|---|
+| **MetaMask** — Ethereum wallet & DApp browser | `nkbihfbeogaeaoehlefnkodbefgpgknn` |
+| **Phantom** — Solana, Ethereum & multi-chain wallet | `bfnaelmomeimhlpmgjnjophhpkkoljpa` |
+| **Rabby Wallet** — Multi-chain wallet with security alerts | `acmacodkjbdgmoleebolmdjonilkdbch` |
 
 Click **"Add to Chrome"** for each one. This only needs to be done once — extensions are stored in a persistent Docker volume (`crypto-vault-chrome`) and survive container restarts.
+
+### Only these three extensions can be installed
+
+The Chrome managed policy in [`chrome-policies.json`](chrome-policies.json) uses:
+
+```json
+"ExtensionInstallBlocklist": ["*"],
+"ExtensionInstallAllowlist": [
+  "nkbihfbeogaeaoehlefnkodbefgpgknn",
+  "bfnaelmomeimhlpmgjnjophhpkkoljpa",
+  "acmacodkjbdgmoleebolmdjonilkdbch"
+]
+```
+
+This blocks **every** Chrome Web Store extension by default, then re-permits only MetaMask, Phantom, and Rabby by ID. Attempting to install anything else — even from the Chrome Web Store — is blocked by Chrome itself, not the proxy.
+
+This is a defence-in-depth measure: if a malicious site ever bypassed the proxy, it still couldn't sneak a rogue extension into your wallet browser.
+
+### Adding more extensions
+
+To allow another extension, find its ID (visible in the Chrome Web Store URL: `chromewebstore.google.com/detail/<name>/<ID>`) and add it to `ExtensionInstallAllowlist` in [`chrome-policies.json`](chrome-policies.json), then rebuild:
+
+```bash
+docker compose --profile vault build crypto-vault
+./vault.sh up
+```
+
+Consider the security tradeoff carefully — every extension you add is another supply-chain risk.
 
 ---
 
@@ -241,6 +277,24 @@ echo ".newprotocol.xyz" >> squid/whitelist.txt
 ```
 
 Default whitelist includes: Ethereum/Solana RPCs, major DeFi (Uniswap, Aave, Jupiter, Raydium), block explorers, Chrome Web Store, wallet update servers, IPFS gateways, and hardware wallet bridges. See [`squid/whitelist.txt`](squid/whitelist.txt) for the full list.
+
+---
+
+## Verify the proxy works
+
+After any change to `squid/` (or just to sanity-check your install), run:
+
+```bash
+./scripts/smoketest.sh
+```
+
+This asserts the three properties the proxy must guarantee:
+
+1. **Whitelisted domain reachable** — `api.etherscan.io` returns `200` through the proxy
+2. **Non-whitelisted blocked** — `evil.com` is denied by Squid with `403 Forbidden`
+3. **Direct internet unreachable** — bypassing the proxy from `vault-internal` times out (network is truly isolated)
+
+The same script runs in CI (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)), so any whitelist change gets validated on every push.
 
 ---
 
@@ -327,12 +381,13 @@ crypto-safe-container/
 ├── welcome.html                # First-run wallet install page
 ├── Makefile                    # install-linux / install-mac targets
 ├── crypto-vault.desktop        # Linux .desktop entry
-├── .env.example                # Template
 ├── .dockerignore
 ├── .gitignore
 ├── squid/
 │   ├── squid.conf              # Proxy configuration
 │   └── whitelist.txt           # Allowed domains (edit this!)
+├── scripts/
+│   └── smoketest.sh            # Verify proxy invariants (used by CI)
 └── .github/
     ├── workflows/ci.yml
     └── ISSUE_TEMPLATE/

@@ -1,23 +1,24 @@
 ########################################################
 # Crypto Vault — Chrome + Foundry + Node.js
 #
-# Base: kasmweb/chrome (Debian, Chromium)
+# Base: debian:bookworm-slim (minimal, ~80MB)
+# Chrome is installed from Google's official apt repo.
 # Adds: Foundry (forge/cast/anvil), Node.js 20, ethers.js,
-#        hardhat, and wallet extension welcome page
+#        hardhat, and wallet extension welcome page.
 # Run via: ./vault-x11.sh (native X11 window)
 ########################################################
 
-FROM kasmweb/chrome:1.18.0
+FROM debian:bookworm-slim
 
-USER root
-
-# ── Switch apt to HTTPS (port 80 may be blocked in some envs) ──
-RUN sed -i 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' /etc/apt/sources.list \
-    && sed -i 's|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list
-
-# ── System deps ──
+# ── System deps + Chromium ──
+# Using Debian's chromium (not Google Chrome) because recent Chrome
+# stable builds hit SIGILL on Hyper-V/WSL2 due to aggressive SIMD in
+# the precompiled binaries. Debian's build is more conservative and
+# runs everywhere. Wallet extensions (same IDs) work identically.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl git ca-certificates gnupg build-essential python3 \
+        ca-certificates curl git gnupg build-essential python3 \
+        chromium fonts-liberation libu2f-udev libasound2 xdg-utils \
+    && ln -sf /usr/bin/chromium /usr/local/bin/google-chrome \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Node.js 20 LTS ──
@@ -40,27 +41,24 @@ RUN npm install -g \
         solc \
     && npm cache clean --force
 
-# ── Chrome managed policy ──
-RUN mkdir -p /etc/opt/chrome/policies/managed \
-    && rm -f /etc/opt/chrome/policies/managed/urlblocklist.json
+# ── Chromium managed policy (same file deployed to both Chromium and
+#    Google Chrome policy paths for forward-compatibility) ──
+RUN mkdir -p /etc/chromium/policies/managed /etc/opt/chrome/policies/managed
+COPY chrome-policies.json /etc/chromium/policies/managed/policies.json
 COPY chrome-policies.json /etc/opt/chrome/policies/managed/policies.json
 
 # ── Welcome page with wallet install links ──
+RUN mkdir -p /opt/chrome-extensions
 COPY welcome.html /opt/chrome-extensions/welcome.html
 
 # ── Hardened npm defaults ──
 RUN echo "ignore-scripts=true" >> /etc/npmrc
 
-# ── Pre-populate home dir from KasmVNC default profile ──
-RUN cp -rp /home/kasm-default-profile/. /home/kasm-user/ \
-    && mkdir -p /home/kasm-user/Uploads /home/kasm-user/Downloads \
-                /home/kasm-user/Desktop /home/kasm-user/projects \
-                /home/kasm-user/.config/google-chrome \
-    && ln -sf /home/kasm-user/Uploads /home/kasm-user/Desktop/Uploads \
-    && ln -sf /home/kasm-user/Downloads /home/kasm-user/Desktop/Downloads \
-    && chown -R 1000:0 /home/kasm-user
+# ── Non-root user ──
+RUN useradd -m -u 1000 -U -s /bin/bash vault \
+    && mkdir -p /home/vault/Downloads /home/vault/projects \
+                /home/vault/.config/google-chrome \
+    && chown -R 1000:1000 /home/vault
 
 USER 1000
-WORKDIR /home/kasm-user/projects
-
-# KasmVNC entrypoint is inherited from base image
+WORKDIR /home/vault/projects

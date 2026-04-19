@@ -7,76 +7,68 @@ set -euo pipefail
 # No VNC = no blur, no compression, no disconnects.
 #
 # Supports: Linux, WSL2 (WSLg), macOS (XQuartz)
+#
+# Delegates orchestration (proxy start, health wait, volumes,
+# networks) to `docker compose run --rm crypto-vault`, using the
+# `vault` profile defined in docker-compose.yml.
 # ─────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ── Detect platform and set X11 socket / DISPLAY ──
-X11_MOUNT="/tmp/.X11-unix:/tmp/.X11-unix:ro"
-EXTRA_ARGS=()
-
+# ── Platform detection: set DISPLAY + xhost authorisation ──
 case "$(uname -s)" in
     Darwin)
         # macOS — requires XQuartz (brew install --cask xquartz)
-        if ! command -v xquartz &>/dev/null && [ ! -d /Applications/Utilities/XQuartz.app ]; then
+        if ! command -v xquartz &>/dev/null \
+           && [ ! -d /Applications/Utilities/XQuartz.app ]; then
             echo "Error: XQuartz is required. Install with: brew install --cask xquartz"
             exit 1
         fi
-        # Allow container to connect to XQuartz
+        # Allow the container (via host.docker.internal) to connect to XQuartz
         xhost +localhost &>/dev/null || true
-        DISPLAY="host.docker.internal:0"
-        X11_MOUNT="/tmp/.X11-unix:/tmp/.X11-unix:ro"
-        EXTRA_ARGS+=("--add-host=host.docker.internal:host-gateway")
+        export DISPLAY="host.docker.internal:0"
         ;;
     Linux)
         if grep -qi microsoft /proc/version 2>/dev/null; then
-            # WSL2 — uses WSLg's X server
-            DISPLAY="${DISPLAY:-:0}"
+            # WSL2 — WSLg provides the X server; DISPLAY is already set
+            export DISPLAY="${DISPLAY:-:0}"
         else
-            # Native Linux
-            DISPLAY="${DISPLAY:-:0}"
+            # Native Linux — grant local Docker access to the X server
             xhost +local:docker &>/dev/null || true
+            export DISPLAY="${DISPLAY:-:0}"
         fi
+        ;;
+    *)
+        echo "Error: unsupported platform $(uname -s)"
+        exit 1
         ;;
 esac
 
-# ── Ensure proxy is running ──
-if ! docker compose ps egress-proxy --format '{{.Status}}' 2>/dev/null | grep -q 'Up'; then
-    echo "Starting egress proxy..."
-    docker compose up -d egress-proxy
-    sleep 3
+# ── Build image if missing (compose doesn't auto-build on `run`) ──
+if ! docker image inspect crypto-safe-container:latest >/dev/null 2>&1; then
+    echo "Building vault image (first run only)..."
+    docker compose --profile vault build crypto-vault
 fi
 
-# ── Remove stale Chrome profile lock ──
+# ── Clear stale Chrome profile lock from a previous crash ──
 docker run --rm -v crypto-vault-chrome:/data busybox \
-    rm -f /data/SingletonLock /data/SingletonSocket /data/SingletonCookie 2>/dev/null || true
+    rm -f /data/SingletonLock /data/SingletonSocket /data/SingletonCookie \
+    2>/dev/null || true
 
 echo "Launching Crypto Vault..."
 
-docker run --rm -it \
-    --name crypto-vault-x11 \
-    --network crypto-safe-container_vault-internal \
-    --ip 172.30.0.10 \
-    --dns 172.30.0.2 \
-    -e DISPLAY="$DISPLAY" \
-    -v "$X11_MOUNT" \
-    -v crypto-vault-chrome:/home/kasm-user/.config/google-chrome \
-    -v crypto-vault-downloads:/home/kasm-user/Downloads \
-    -v crypto-vault-projects:/home/kasm-user/projects \
-    --shm-size=512m \
-    --cap-drop ALL \
-    --security-opt no-new-privileges:true \
-    "${EXTRA_ARGS[@]}" \
-    --entrypoint bash \
-    crypto-safe-container-crypto-vault \
-    -c '
-        exec /opt/google/chrome/google-chrome \
-            --no-sandbox \
-            --password-store=basic \
-            --proxy-server=http://172.30.0.2:3128 \
-            --no-first-run \
-            --disable-search-engine-choice-screen \
-            file:///opt/chrome-extensions/welcome.html \
-            "$@"
-    '
+# `docker compose run` handles:
+#   - starting egress-proxy (via depends_on)
+#   - waiting for proxy health (condition: service_healthy)
+#   - attaching vault-internal network + DNS
+#   - mounting volumes + X11 socket
+# `--rm` removes the container on exit.
+exec docker compose --profile vault run --rm crypto-vault \
+    chromium \
+    --no-sandbox \
+    --password-store=basic \
+    --proxy-server=http://172.30.0.2:3128 \
+    --no-first-run \
+    --disable-search-engine-choice-screen \
+    file:///opt/chrome-extensions/welcome.html

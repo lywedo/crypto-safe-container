@@ -31,7 +31,7 @@ Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md).
 ```bash
 git clone https://github.com/lywedo/crypto-safe-container.git
 cd crypto-safe-container
-cp .env.example .env
+docker compose build
 ./vault.sh up
 ```
 

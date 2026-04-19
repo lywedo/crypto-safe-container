@@ -30,4 +30,4 @@ These are **by design** and not considered vulnerabilities:
 - Docker containers share the host kernel (use a VM for stronger isolation)
 - The Squid proxy trusts DNS resolution
 - USB passthrough for hardware wallets requires `--device` which relaxes isolation
-- KasmVNC uses a self-signed certificate by default
+- Chrome runs with `--no-sandbox` inside the container — acceptable because the container itself provides isolation via `--cap-drop ALL` and `no-new-privileges`, but users should be aware that browser sandboxing is relaxed

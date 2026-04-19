@@ -1,0 +1,20 @@
+The demo GIF at `.github/demo.gif` must be captured on a machine with
+a running X server — it cannot be generated in a headless coding
+environment because it shows the Chrome GUI.
+
+To generate it:
+
+    ./scripts/record-demo.sh
+
+This orchestrates:
+  1. `vhs scripts/demo.tape` — records the terminal curl demo
+  2. `ffmpeg -f x11grab` — screen-records the full 10s sequence
+     (launch + Chrome welcome + curl demos) and produces `.github/demo.gif`
+
+Requirements on the recording machine:
+  - ffmpeg          (sudo apt install ffmpeg)
+  - vhs             (go install github.com/charmbracelet/vhs@latest)
+  - A visible X server (Linux native, WSL2+WSLg, or macOS+XQuartz)
+
+Target: < 10s, < 2MB. Adjust FPS/WIDTH at the top of record-demo.sh
+if the output is too large.

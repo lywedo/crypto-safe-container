@@ -3,43 +3,47 @@ set -euo pipefail
 
 # ─────────────────────────────────────────────────
 # Crypto Vault — Helper Commands
+# Thin wrapper around docker compose (profile: vault).
+# Each dev command spins up an ephemeral vault container.
 # ─────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
 CMD="${1:-help}"
+
+# Run a one-shot command inside a fresh vault container
+vault_run() {
+    docker compose --profile vault run --rm crypto-vault "$@"
+}
 
 case "$CMD" in
   up)
-    echo "🔐 Starting Crypto Vault..."
-    docker compose up -d egress-proxy
-    sleep 2
+    echo "Launching Crypto Vault..."
     "$SCRIPT_DIR/vault-x11.sh"
     ;;
 
   down)
-    echo "🛑 Stopping Crypto Vault..."
-    docker stop crypto-vault-x11 2>/dev/null || true
-    docker compose down
+    echo "Stopping Crypto Vault..."
+    docker compose --profile vault down
     ;;
 
   shell)
-    echo "🐚 Entering vault shell..."
-    docker exec -it crypto-vault-x11 /bin/bash
+    vault_run bash
     ;;
 
   forge)
     shift
-    docker exec -it crypto-vault-x11 forge "$@"
+    vault_run forge "$@"
     ;;
 
   cast)
     shift
-    docker exec -it crypto-vault-x11 cast "$@"
+    vault_run cast "$@"
     ;;
 
   hardhat)
     shift
-    docker exec -it -w /home/kasm-user/projects crypto-vault-x11 npx hardhat "$@"
+    vault_run npx hardhat "$@"
     ;;
 
   logs)
@@ -47,62 +51,65 @@ case "$CMD" in
     ;;
 
   whitelist)
-    echo "📝 Current whitelist:"
-    cat squid/whitelist.txt | grep -v "^#" | grep -v "^$"
-    echo ""
+    echo "Current whitelist:"
+    grep -v "^#" squid/whitelist.txt | grep -v "^$"
+    echo
     echo "Edit squid/whitelist.txt then run: $0 reload-proxy"
     ;;
 
   reload-proxy)
-    echo "🔄 Reloading proxy whitelist..."
     docker compose restart egress-proxy
-    echo "✅ Proxy restarted with updated whitelist."
+    echo "Proxy restarted with updated whitelist."
     ;;
 
   backup)
     BACKUP_DIR="backups/$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$BACKUP_DIR"
-    echo "💾 Backing up Chrome profile (includes wallet data)..."
+    echo "Backing up Chrome profile..."
     docker run --rm \
       -v crypto-vault-chrome:/data:ro \
       -v "$(pwd)/$BACKUP_DIR":/backup \
       alpine tar czf /backup/chrome-profile.tar.gz -C /data .
-    echo "✅ Backup saved to $BACKUP_DIR/chrome-profile.tar.gz"
-    echo "⚠️  Store this backup ENCRYPTED and OFFLINE."
+    echo "Backup saved to $BACKUP_DIR/chrome-profile.tar.gz"
+    echo "Store this backup ENCRYPTED and OFFLINE."
     ;;
 
   nuke)
-    echo "💣 This will DELETE all vault data (wallets, browser profile, projects)."
-    read -p "   Type 'yes' to confirm: " confirm
+    echo "This will DELETE all vault data (wallets, browser profile, projects)."
+    read -p "Type 'yes' to confirm: " confirm
     if [ "$confirm" = "yes" ]; then
-      docker stop crypto-vault-x11 2>/dev/null || true
-      docker compose down -v
-      echo "✅ All vault data destroyed."
+      docker compose --profile vault down -v
+      echo "All vault data destroyed."
     else
-      echo "❌ Cancelled."
+      echo "Cancelled."
     fi
     ;;
 
+  smoketest)
+    ./scripts/smoketest.sh
+    ;;
+
   status)
-    echo "📊 Vault Status:"
-    docker compose ps
-    docker ps --filter name=crypto-vault-x11 --format "{{.Names}} {{.Status}}" 2>/dev/null
+    docker compose --profile vault ps
     ;;
 
   help|*)
-    echo "Crypto Vault — Helper Commands"
-    echo ""
-    echo "  ./vault.sh up            Launch Chrome + proxy (X11)"
-    echo "  ./vault.sh down          Stop everything"
-    echo "  ./vault.sh shell         Open bash inside vault"
-    echo "  ./vault.sh forge <args>  Run forge commands"
-    echo "  ./vault.sh cast <args>   Run cast commands"
-    echo "  ./vault.sh hardhat <a>   Run hardhat commands"
-    echo "  ./vault.sh logs [svc]    Follow container logs"
-    echo "  ./vault.sh whitelist     Show allowed domains"
-    echo "  ./vault.sh reload-proxy  Apply whitelist changes"
-    echo "  ./vault.sh backup        Backup Chrome profile"
-    echo "  ./vault.sh status        Health check"
-    echo "  ./vault.sh nuke          DELETE all vault data"
+    cat <<EOF
+Crypto Vault — Helper Commands
+
+  ./vault.sh up            Launch Chrome (X11)
+  ./vault.sh down          Stop everything
+  ./vault.sh shell         Open bash in an ephemeral vault container
+  ./vault.sh forge <args>  Run forge commands
+  ./vault.sh cast <args>   Run cast commands
+  ./vault.sh hardhat <a>   Run hardhat commands
+  ./vault.sh logs [svc]    Follow container logs
+  ./vault.sh whitelist     Show allowed domains
+  ./vault.sh reload-proxy  Apply whitelist changes
+  ./vault.sh smoketest     Verify proxy invariants
+  ./vault.sh backup        Backup Chrome profile
+  ./vault.sh status        List services + profile containers
+  ./vault.sh nuke          DELETE all vault data
+EOF
     ;;
 esac

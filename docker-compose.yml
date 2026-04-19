@@ -2,9 +2,12 @@
 # Crypto Vault — Isolated browser + Web3 CLI tools
 #
 # Usage:
-#   cp .env.example .env
-#   docker compose up -d egress-proxy   # Start proxy
-#   ./vault-x11.sh                      # Launch Chrome (X11)
+#   ./vault-x11.sh                       # Launch Chrome (X11)
+#   docker compose --profile vault run --rm crypto-vault bash   # Shell
+#
+# The crypto-vault service uses `profiles: ["vault"]` so it only
+# starts when explicitly requested (via profile or vault-x11.sh).
+# The egress-proxy has no profile and always runs in the background.
 #
 # Architecture:
 #   crypto-vault ──▶ egress-proxy ──▶ internet (whitelist only)
@@ -12,6 +15,34 @@
 ##############################################################
 
 services:
+  # ── Crypto Vault: Chrome + Web3 tools (profile-gated, ephemeral) ──
+  crypto-vault:
+    profiles: ["vault"]
+    build: .
+    image: crypto-safe-container:latest
+    networks:
+      vault-internal:
+        ipv4_address: 172.30.0.10
+    dns:
+      - 172.30.0.2
+    volumes:
+      - chrome-profile:/home/vault/.config/google-chrome
+      - vault-downloads:/home/vault/Downloads
+      - vault-projects:/home/vault/projects
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+    extra_hosts:
+      # For macOS XQuartz — host.docker.internal resolves to the host
+      - "host.docker.internal:host-gateway"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    shm_size: 512m
+    depends_on:
+      egress-proxy:
+        condition: service_healthy
+
   # ── Egress Proxy: Whitelist-only internet access ──
   egress-proxy:
     image: ubuntu/squid:latest
@@ -36,6 +67,15 @@ services:
       - ./squid/squid.conf:/etc/squid/squid.conf:ro
       - ./squid/whitelist.txt:/etc/squid/whitelist.txt:ro
 
+    healthcheck:
+      # Squid listens on port 3128 (0x0C38 in /proc/net/tcp*).
+      # Using /proc since ubuntu/squid has no curl/wget/nc/squidclient.
+      test: ["CMD", "sh", "-c", "grep -qE ':0C38 .*:.* 0A ' /proc/net/tcp /proc/net/tcp6 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
     deploy:
       resources:
         limits:
@@ -47,6 +87,7 @@ services:
 networks:
   # Internal network: NO direct internet — containers must use proxy
   vault-internal:
+    name: vault-internal
     driver: bridge
     internal: true
     ipam:
@@ -55,6 +96,7 @@ networks:
 
   # External network: proxy's internet uplink
   vault-external:
+    name: vault-external
     driver: bridge
 
 volumes:

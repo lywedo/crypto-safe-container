@@ -1,8 +1,6 @@
 {
   "RestoreOnStartup": 4,
-  "RestoreOnStartupURLs": [
-    "file:///opt/chrome-extensions/welcome.html"
-  ],
+  "RestoreOnStartupURLs": ["file:///opt/chrome-extensions/welcome.html"],
   "DefaultBrowserSettingEnabled": false,
   "MetricsReportingEnabled": false,
   "SafeBrowsingEnabled": true,
@@ -10,5 +8,11 @@
   "AutofillAddressEnabled": false,
   "AutofillCreditCardEnabled": false,
   "TranslateEnabled": false,
-  "SpellcheckEnabled": false
+  "SpellcheckEnabled": false,
+  "ExtensionInstallBlocklist": ["*"],
+  "ExtensionInstallAllowlist": [
+    "nkbihfbeogaeaoehlefnkodbefgpgknn",
+    "bfnaelmomeimhlpmgjnjophhpkkoljpa",
+    "acmacodkjbdgmoleebolmdjonilkdbch"
+  ]
 }
